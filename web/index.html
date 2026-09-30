@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>商场扶梯启停巡检与封控复开平台</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">🛗</div>
+    <div>扶梯启停巡检与封控复开平台<small>商场设备运行 · 演示数据</small></div>
+  </div>
+  <div class="spacer"></div>
+  <div class="person-pick">
+    <span class="muted small">当前操作人员</span>
+    <select id="personSelect"></select>
+    <span class="role-badge" id="roleBadge">—</span>
+  </div>
+  <span class="clock" id="clock">--:--:--</span>
+</header>
+
+<nav class="nav" id="nav">
+  <button data-view="floors" class="active">楼层设备图</button>
+  <button data-view="checklist">开梯清单</button>
+  <button data-view="running">运行状态</button>
+  <button data-view="lockdown">封控计时</button>
+  <button data-view="faults">报修进度</button>
+  <button data-view="approve">复检审批</button>
+  <button data-view="events">事件查询</button>
+</nav>
+
+<main>
+  <!-- 绕行提示总横幅 -->
+  <div id="detourBanners"></div>
+
+  <!-- 1. 楼层设备图 -->
+  <section class="view active" id="view-floors">
+    <h2>楼层设备图</h2>
+    <p class="sub">箭头直接标识运行方向；封控扶梯以红白斜纹边界围挡显示（非整块红色）。点击卡片进入开梯清单。</p>
+    <div id="floorMap"></div>
+  </section>
+
+  <!-- 2. 开梯清单 -->
+  <section class="view" id="view-checklist">
+    <h2>开梯清单</h2>
+    <p class="sub">每日开梯前梯级、梳齿板、扶手带、照明、急停装置五项必须全部合格；急停装置测试通过后方可启动。</p>
+    <div class="card">
+      <div class="inline">
+        <label class="small muted">选择扶梯</label>
+        <select id="clEsc" class="flat"></select>
+        <span id="clVersion" class="chip"></span>
+        <span class="spacer" style="flex:1"></span>
+        <div class="inline">
+          <span class="small muted">方向设置</span>
+          <select id="clDirection" class="flat">
+            <option value="UP">▲ 上行</option>
+            <option value="DOWN">▼ 下行</option>
+          </select>
+          <button class="btn sm" id="btnSetDir">设置方向</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>班前检查（每项必须选择 通过 / 失败 / 不适用，必检项不可选不适用）</h3>
+      <div id="clSummary" class="summary-bar">尚未建立今日检查表</div>
+      <table class="tbl">
+        <thead><tr><th style="width:170px">检查项</th><th>判定</th><th>备注</th></tr></thead>
+        <tbody id="clItems"></tbody>
+      </table>
+      <div class="btn-row">
+        <button class="btn" id="btnOpenInspection">建立/打开今日检查表</button>
+        <button class="btn dark" id="btnEstopPass">急停测试：通过</button>
+        <button class="btn ghost-danger" id="btnEstopFail">急停测试：失败（将封控）</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>启动扶梯</h3>
+      <p class="sub" style="margin-bottom:8px">启动命令按<b>当前配置版本</b>提交；两名值班员不能同时启动同一部扶梯。</p>
+      <div class="btn-row">
+        <button class="btn" id="btnAcquire">占用启动权</button>
+        <button class="btn" id="btnRelease">放弃启动</button>
+        <button class="btn green" id="btnStart">按当前版本启动</button>
+        <button class="btn" id="btnStop">停梯</button>
+      </div>
+      <div class="reopen-zone">
+        <span class="zone-label">高风险操作</span>
+        <button class="btn reopen" id="btnReopenChecklist" disabled>撤围挡 · 复 开</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. 运行状态 -->
+  <section class="view" id="view-running">
+    <h2>运行状态</h2>
+    <p class="sub">控制柜与客流读数来自模拟适配器；运行中跳停或客流事件将自动停梯封控。</p>
+    <div class="grid cols-3" id="runningGrid"></div>
+  </section>
+
+  <!-- 4. 封控计时 -->
+  <section class="view" id="view-lockdown">
+    <h2>封控计时</h2>
+    <p class="sub">封控时长、围挡状态（10 分钟宽限）、维修到场（30 分钟）与修复（120 分钟）时限。</p>
+    <div id="lockdownList"></div>
+  </section>
+
+  <!-- 5. 报修进度 -->
+  <section class="view" id="view-faults">
+    <h2>报修进度</h2>
+    <p class="sub">派单 → 出发 → 到场 → 维修 → 复检 → 审批 → 撤围挡复开；围挡缺失时禁止完成维修。</p>
+    <div class="card">
+      <div class="inline">
+        <h3 style="margin:0">新建封控/报修</h3>
+      </div>
+      <div class="inline mt8">
+        <select id="nfEsc" class="flat"></select>
+        <select id="nfSource" class="flat">
+          <option value="FAULT">设备故障</option>
+          <option value="INCIDENT">客流事件</option>
+          <option value="ESTOP">急停测试失败</option>
+        </select>
+        <input type="text" id="nfReason" placeholder="故障/事件描述" style="flex:1;min-width:220px">
+        <button class="btn danger" id="btnSeal">停梯封控</button>
+      </div>
+    </div>
+    <div id="faultList"></div>
+  </section>
+
+  <!-- 6. 复检审批 -->
+  <section class="view" id="view-approve">
+    <h2>复检审批</h2>
+    <p class="sub">巡检员提交复检，主管审批；巡检员不能批准自己的复检。复开按钮在工单卡片底部隔离区。</p>
+    <div class="filter-bar">
+      <label><input type="checkbox" id="apPendingOnly" checked> 仅看待审批</label>
+    </div>
+    <div id="approveList"></div>
+  </section>
+
+  <!-- 7. 事件查询 -->
+  <section class="view" id="view-events">
+    <h2>事件查询</h2>
+    <p class="sub">SQLite 中只追加的状态事件流，可按扶梯筛选。</p>
+    <div class="filter-bar">
+      <select id="evEsc" class="flat"><option value="">全部扶梯</option></select>
+      <input type="text" id="evKeyword" placeholder="按类型/内容关键字过滤" class="flat" style="min-width:220px">
+      <button class="btn sm" id="evRefresh">查询</button>
+    </div>
+    <div class="card"><ul class="timeline" id="eventList"></ul></div>
+  </section>
+</main>
+
+<!-- 复开二次确认弹层 -->
+<div class="modal-mask" id="reopenModal">
+  <div class="modal">
+    <h3>确认撤除围挡并复开？</h3>
+    <p id="reopenModalText" class="small"></p>
+    <p class="small muted">该操作将恢复扶梯运行，请确认：复检已经主管审批通过、围挡可以安全撤除、现场无滞留人员。</p>
+    <div class="btn-row">
+      <button class="btn" id="reopenCancel">取消</button>
+      <button class="btn reopen" style="margin-left:0" id="reopenConfirm">确认复开</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<script src="app.js"></script>
+</body>
+</html>
