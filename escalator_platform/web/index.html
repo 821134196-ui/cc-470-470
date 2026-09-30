@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>商场扶梯启停巡检与封控复开平台</title>
+<style>
+:root{
+  --mall-white:#f4f5f7; --card:#ffffff; --ink:#1f252c; --ink-2:#5b6470;
+  --silver:#9aa3ad; --silver-line:#d7dce1; --silver-dark:#6b7280;
+  --red:#d7263d; --red-soft:#fdecef;
+  --green:#1f8a5b; --green-soft:#e8f5ee;
+  --amber:#c8821a; --amber-soft:#fdf3e3;
+  --blue:#2b5fd9;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  background:var(--mall-white);color:var(--ink);font-size:14px}
+header{background:linear-gradient(180deg,#ffffff,#eef0f3);
+  border-bottom:1px solid var(--silver-line);padding:12px 22px;
+  display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+header h1{font-size:18px;font-weight:700;letter-spacing:1px}
+header .sub{color:var(--ink-2);font-size:12px}
+.role-box{margin-left:auto;display:flex;align-items:center;gap:8px;
+  background:#fff;border:1px solid var(--silver-line);border-radius:8px;
+  padding:6px 12px}
+.role-box select{font-size:14px;padding:4px 8px;border:1px solid var(--silver);
+  border-radius:6px;background:#fff}
+nav.tabs{display:flex;gap:4px;padding:0 22px;background:#fff;
+  border-bottom:1px solid var(--silver-line);flex-wrap:wrap}
+nav.tabs button{background:none;border:none;padding:13px 18px;cursor:pointer;
+  font-size:14px;color:var(--ink-2);border-bottom:3px solid transparent}
+nav.tabs button.active{color:var(--ink);font-weight:700;border-bottom-color:var(--red)}
+main{padding:20px 22px;max-width:1280px;margin:0 auto}
+.tabview{display:none}.tabview.active{display:block}
+.card{background:var(--card);border:1px solid var(--silver-line);border-radius:10px;
+  padding:16px 18px;margin-bottom:16px;
+  box-shadow:0 1px 2px rgba(30,40,50,.04)}
+.card h2{font-size:15px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.card h2 .tag{font-size:11px;font-weight:400;color:var(--ink-2)}
+table{width:100%;border-collapse:collapse}
+th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--silver-line);
+  vertical-align:middle}
+th{font-size:12px;color:var(--ink-2);font-weight:600;background:#fafbfc}
+tr:last-child td{border-bottom:none}
+button.act{border:1px solid var(--silver);background:#fff;color:var(--ink);
+  border-radius:6px;padding:6px 12px;cursor:pointer;font-size:13px;margin:2px 3px}
+button.act:hover{border-color:var(--silver-dark);background:#f6f7f9}
+button.act:disabled{opacity:.42;cursor:not-allowed}
+button.primary{background:var(--green);border-color:var(--green);color:#fff}
+button.primary:hover{background:#176e49}
+button.danger{background:var(--red);border-color:var(--red);color:#fff}
+button.danger:hover{background:#b91f34}
+button.amber{background:var(--amber);border-color:var(--amber);color:#fff}
+/* 复开确认：与普通操作保持明显距离 —— 独立隔离区 + 大间距 */
+.reopen-zone{margin-top:34px;padding:22px 20px 20px;border:2px dashed var(--red);
+  border-radius:12px;background:var(--red-soft)}
+.reopen-zone h3{color:var(--red);font-size:15px;margin-bottom:6px}
+.reopen-zone .hint{color:var(--ink-2);font-size:12px;margin-bottom:12px}
+button.reopen{background:var(--red);color:#fff;border:none;border-radius:8px;
+  font-size:16px;font-weight:700;padding:13px 34px;letter-spacing:3px;cursor:pointer}
+button.reopen:disabled{background:var(--silver)}
+.badge{display:inline-block;padding:2px 9px;border-radius:11px;font-size:12px;
+  font-weight:600}
+.badge.running{background:var(--green-soft);color:var(--green)}
+.badge.stopped{background:#eef0f3;color:var(--silver-dark)}
+.badge.locked{background:var(--red-soft);color:var(--red)}
+.badge.pass{background:var(--green-soft);color:var(--green)}
+.badge.fail{background:var(--red-soft);color:var(--red)}
+.badge.na{background:#eef0f3;color:var(--silver-dark)}
+.badge.pending{background:var(--amber-soft);color:var(--amber)}
+/* ---------- 楼层图 ---------- */
+.floor-map{display:flex;flex-direction:column-reverse;gap:0}
+.floor-band{display:flex;align-items:center;gap:16px;background:#fff;
+  border:1px solid var(--silver-line);border-radius:8px;padding:10px 18px}
+.floor-band .fl{font-size:17px;font-weight:700;width:56px;color:var(--silver-dark)}
+.floor-band .halls{flex:1;color:var(--ink-2);font-size:12px}
+.gap-row{display:flex;justify-content:center;gap:120px;padding:0;height:86px}
+.esc-node{width:150px;transform:translateY(-8px);cursor:pointer;text-align:center;
+  position:relative}
+.esc-shaft{height:70px;border:2px solid var(--silver);border-radius:8px;background:#f0f2f4;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  transition:box-shadow .15s}
+.esc-shaft:hover{box-shadow:0 0 0 3px rgba(43,95,217,.18)}
+.esc-shaft.running{border-color:var(--green);background:var(--green-soft)}
+.esc-shaft.stopped{border-color:var(--silver)}
+/* 停梯围挡：斜纹边界（而非整块红色） */
+.esc-shaft.locked{background:#fff;
+  border:7px solid transparent;
+  border-image:repeating-linear-gradient(45deg,
+     var(--red) 0 9px,#ffffff 9px 18px) 7;}
+.esc-arrow{font-size:22px;line-height:1;font-weight:700}
+.esc-arrow.up{color:var(--blue)}.esc-arrow.down{color:var(--silver-dark)}
+.esc-shaft.running .esc-arrow{color:var(--green)}
+.esc-node .nm{font-size:12px;color:var(--ink-2);margin-top:4px}
+.esc-node .st{font-size:11px;font-weight:700}
+.esc-node .st.running{color:var(--green)}.esc-node .st.stopped{color:var(--silver-dark)}
+.esc-node .st.locked{color:var(--red)}
+.detour-banner{background:var(--amber-soft);border:1px solid var(--amber);
+  color:#7a5010;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px}
+/* ---------- 检查项 ---------- */
+.pc-items{display:flex;gap:6px;flex-wrap:wrap}
+.pc-items label{display:inline-flex;align-items:center;gap:3px;font-size:12px;
+  border:1px solid var(--silver-line);border-radius:5px;padding:3px 7px;cursor:pointer;
+  background:#fff}
+.pc-items label.sel-pass{border-color:var(--green);background:var(--green-soft)}
+.pc-items label.sel-fail{border-color:var(--red);background:var(--red-soft)}
+.pc-items label.sel-na{border-color:var(--silver);background:#eef0f3}
+.pc-items input{accent-color:var(--green)}
+.readings{font-size:12px;color:var(--ink-2);line-height:1.7}
+.readings b{color:var(--ink);font-weight:600}
+.timer{font-variant-numeric:tabular-nums;font-weight:700;color:var(--red);font-size:16px}
+.flow-steps{display:flex;gap:0;align-items:center;flex-wrap:wrap;margin:6px 0 4px}
+.flow-steps .step{padding:5px 10px;border-radius:14px;font-size:12px;background:#eef0f3;
+  color:var(--silver-dark);white-space:nowrap}
+.flow-steps .step.done{background:var(--green-soft);color:var(--green)}
+.flow-steps .step.bad{background:var(--red-soft);color:var(--red)}
+.flow-steps .arr{color:var(--silver);margin:0 5px}
+.toast-wrap{position:fixed;right:18px;bottom:18px;z-index:99;display:flex;
+  flex-direction:column;gap:8px;max-width:380px}
+.toast{background:#262b32;color:#fff;padding:10px 14px;border-radius:8px;font-size:13px;
+  box-shadow:0 4px 16px rgba(0,0,0,.25);border-left:4px solid var(--silver)}
+.toast.ok{border-left-color:var(--green)}
+.toast.err{border-left-color:var(--red)}
+.toast b{display:block;margin-bottom:2px}
+.filters{display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.filters select,.filters input{padding:6px 9px;border:1px solid var(--silver);
+  border-radius:6px;font-size:13px}
+.timeline{position:relative;padding-left:22px}
+.timeline:before{content:"";position:absolute;left:6px;top:4px;bottom:4px;width:2px;
+  background:var(--silver-line)}
+.ev{position:relative;padding:7px 0 7px 6px;font-size:13px;border-bottom:1px dashed #e8eaed}
+.ev:before{content:"";position:absolute;left:-21px;top:13px;width:9px;height:9px;border-radius:50%;
+  background:var(--silver);border:2px solid #fff}
+.ev.bad:before{background:var(--red)}.ev.good:before{background:var(--green)}
+.ev.warn:before{background:var(--amber)}
+.ev .t{color:var(--ink-2);font-size:11px;margin-right:8px}
+.ev .ty{font-weight:700;margin-right:8px}
+.ev .pl{color:var(--ink-2);font-size:12px;word-break:break-all}
+.muted{color:var(--ink-2);font-size:12px}
+.photo-thumb{max-width:130px;max-height:90px;border:1px solid var(--silver-line);
+  border-radius:6px;margin-top:5px}
+input.txt,textarea.txt{border:1px solid var(--silver);border-radius:6px;
+  padding:6px 9px;font-size:13px;font-family:inherit}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:900px){.grid2{grid-template-columns:1fr}.gap-row{gap:40px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>🛗 商场扶梯启停巡检与封控复开平台</h1>
+  <span class="sub">班前检查 · 急停测试 · 封控围挡 · 维修复检 · 复开确认 · 客流绕行</span>
+  <div class="role-box">
+    <span>当前登录</span>
+    <select id="staffSel" onchange="App.setStaff()"></select>
+    <span id="roleTag" class="badge stopped"></span>
+  </div>
+</header>
+<nav class="tabs" id="tabs">
+  <button data-tab="map" class="active">楼层设备图</button>
+  <button data-tab="precheck">开梯清单</button>
+  <button data-tab="status">运行状态</button>
+  <button data-tab="lockdown">封控计时 / 报修 / 复开</button>
+  <button data-tab="recheck">复检审批</button>
+  <button data-tab="events">事件查询</button>
+</nav>
+<main>
+  <!-- 楼层设备图 -->
+  <section id="tab-map" class="tabview active">
+    <div id="detourBanners"></div>
+    <div class="card">
+      <h2>楼层设备图 <span class="tag">箭头直接标识当前运行方向（蓝↑上行 / 灰↓下行）；斜纹边界=停梯围挡封控；点击设备进入对应工作台</span></h2>
+      <div class="floor-map" id="floorMap"></div>
+    </div>
+  </section>
+
+  <!-- 开梯清单 -->
+  <section id="tab-precheck" class="tabview">
+    <div class="card">
+      <h2>开梯清单 <span class="tag">每日开梯前梯级 / 梳齿板 / 扶手带 / 照明 / 急停装置逐项判定，全部合格才允许启动</span></h2>
+      <table>
+        <thead><tr><th>扶梯</th><th>计划方向</th><th>班前检查（每项可选 通过 / 失败 / 不适用）</th>
+          <th>急停装置</th><th>检查结论</th><th>启动</th></tr></thead>
+        <tbody id="precheckRows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 运行状态 -->
+  <section id="tab-status" class="tabview">
+    <div class="grid2">
+      <div class="card" id="statusCards"></div>
+      <div>
+        <div class="card">
+          <h2>客服绕行提示 <span class="tag">仅客服角色可发布 / 撤销</span></h2>
+          <div id="detourAdmin"></div>
+        </div>
+        <div class="card">
+          <h2>演示注入 <span class="tag">模拟控制柜与客流传感器</span></h2>
+          <div id="injectPanel"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 封控/报修/复开 -->
+  <section id="tab-lockdown" class="tabview"></section>
+
+  <!-- 复检审批 -->
+  <section id="tab-recheck" class="tabview">
+    <div class="card"><h2>待审批复检 <span class="tag">须由非提交人本人的另一名巡检员批准</span></h2>
+      <div id="recheckList"></div></div>
+    <div class="card"><h2>最近复检记录</h2><div id="recheckHistory"></div></div>
+  </section>
+
+  <!-- 事件查询 -->
+  <section id="tab-events" class="tabview">
+    <div class="card">
+      <h2>事件时序查询</h2>
+      <div class="filters">
+        <select id="fEsc"><option value="">全部扶梯</option></select>
+        <select id="fType">
+          <option value="">全部事件</option>
+        </select>
+        <button class="act" onclick="App.loadEvents()">查询</button>
+      </div>
+      <div class="timeline" id="eventList"></div>
+    </div>
+  </section>
+</main>
+<div class="toast-wrap" id="toasts"></div>
+
+<script>
+const ROLE_NAMES={duty:"值班员",inspector:"巡检员",service:"维修工",cs:"客服"};
+const ITEMS=[["steps","梯级"],["comb","梳齿板"],["handrail","扶手带"],["lighting","照明"]];
+const EVENT_TYPES=["PRECHECK_PASS","PRECHECK_FAIL","START","START_REJECTED","STOP",
+ "TRIP","LOCKDOWN","BARRIER_SET","BARRIER_REMOVE","REPAIR_REPORT","REPAIR_ARRIVE",
+ "REPAIR_FIXED","REPAIR_REWORK","REPAIR_OVERDUE","RECHECK_SUBMIT","RECHECK_APPROVED",
+ "RECHECK_REJECTED","RECHECK_SELF_APPROVE_BLOCKED","REOPEN","DIRECTION_SET",
+ "SCHEDULE_SET","SCHEDULED_START","SCHEDULED_START_SKIPPED","SCHEDULED_STOP",
+ "DETOUR_PUBLISH","DETOUR_CANCEL","ARRIVE_BLOCKED"];
+const BAD_EVENTS=new Set(["PRECHECK_FAIL","START_REJECTED","TRIP","LOCKDOWN",
+ "REPAIR_OVERDUE","RECHECK_REJECTED","RECHECK_SELF_APPROVE_BLOCKED",
+ "EARLY_REOPEN","ARRIVE_BLOCKED","SCHEDULED_START_SKIPPED"]);
+const WARN_EVENTS=new Set(["BARRIER_SET","REPAIR_REPORT","RECHECK_SUBMIT","REPAIR_REWORK"]);
+
+const App={
+  staff:[], escs:[], staffId:null, detail:{}, pc:{},
+  escName:{},
+  async api(path,opts={}){
+    const res=await fetch(path,{headers:{"Content-Type":"application/json"},...opts});
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok){const e=new Error(data.message||"请求失败");e.code=data.error;throw e;}
+    return data;
+  },
+  toast(msg,ok=true,code){
+    const w=document.getElementById("toasts");
+    const d=document.createElement("div");
+    d.className="toast "+(ok?"ok":"err");
+    d.innerHTML=`<b>${ok?"操作成功":("✕ "+(code||"错误"))}</b>${msg}`;
+    w.appendChild(d);setTimeout(()=>d.remove(),5200);
+  },
+  async init(){
+    this.staff=await this.api("/api/staff");
+    const sel=document.getElementById("staffSel");
+    sel.innerHTML=this.staff.filter(s=>!s.id.startsWith("SYS")).map(s=>
+      `<option value="${s.id}">${s.name}</option>`).join("");
+    this.staff.forEach(s=>this.escName[s.id]=s.name);
+    document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>this.tab(b.dataset.tab));
+    const ft=document.getElementById("fType");
+    ft.innerHTML='<option value="">全部事件</option>'+EVENT_TYPES.map(t=>`<option>${t}</option>`).join("");
+    await this.refresh();
+    setInterval(()=>this.refresh(true),3000);
+  },
+  setStaff(){
+    this.staffId=document.getElementById("staffSel").value;
+    const s=this.staff.find(x=>x.id===this.staffId);
+    const tag=document.getElementById("roleTag");
+    tag.textContent=ROLE_NAMES[s.role];
+    this.render();
+  },
+  tab(name){
+    document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));
+    document.querySelectorAll(".tabview").forEach(v=>v.classList.remove("active"));
+    document.getElementById("tab-"+name).classList.add("active");
+    if(name==="events")this.loadEvents();
+    if(name==="lockdown")this.renderLockdown();
+    if(name==="recheck")this.renderRechecks();
+  },
+  focusEsc(id,tab){this.tab(tab);setTimeout(()=>{
+    const el=document.getElementById("ld-"+id);if(el)el.scrollIntoView({behavior:"smooth",block:"center"});
+  },60);},
+  async refresh(silent){
+    this.escs=await this.api("/api/escalators");
+    this.escs.forEach(e=>this.escName[e.id]=e.name);
+    const f=document.getElementById("fEsc");
+    f.innerHTML='<option value="">全部扶梯</option>'+this.escs.map(e=>`<option value="${e.id}">${e.id} ${e.name}</option>`).join("");
+    await Promise.all(this.escs.map(async e=>{try{this.detail[e.id]=await this.api("/api/escalators/"+e.id);}catch(_){}}));
+    this.render();
+  },
+  role(){return (this.staff.find(x=>x.id===this.staffId)||{}).role;},
+  render(){
+    this.renderMap();this.renderPrecheck();this.renderStatus();
+    this.renderLockdown();this.renderRechecks();this.renderDetours();
+  },
+
+  /* ---------------- 楼层图 ---------------- */
+  renderMap(){
+    const floors=[4,3,2,1];const hall={1:"一层 · 主入口 / 客服台",2:"二层 · 美妆服饰",
+      3:"三层 · 儿童家居",4:"四层 · 餐饮影城"};
+    let html="";
+    for(const f of floors){
+      html+=`<div class="floor-band"><div class="fl">F${f}</div>
+        <div class="halls">${hall[f]}</div></div>`;
+      const below=f-1;
+      if(below>=1){
+        const list=this.escs.filter(e=>e.floor_from===below&&e.floor_to===f);
+        html+=`<div class="gap-row">`+list.map(e=>{
+          const arrow=e.direction==="up"?"▲":"▼";
+          const stTxt={running:"运行中",stopped:"已停梯",locked:"封控中"}[e.status];
+          return `<div class="esc-node" onclick="App.focusEsc('${e.id}','${e.status==='locked'?'lockdown':'precheck'}')">
+            <div class="esc-shaft ${e.status}">
+              <span class="esc-arrow ${e.direction}">${arrow}</span>
+              <span class="st ${e.status}">${stTxt}</span>
+            </div><div class="nm">${e.id} ${e.name.replace("梯 ","梯")}</div></div>`;
+        }).join("")+`</div>`;
+      }
+    }
+    document.getElementById("floorMap").innerHTML=html;
+  },
+
+  /* ---------------- 开梯清单 ---------------- */
+  pcVal(eid,item){return (this.pc[eid]||{})[item];},
+  setPc(eid,item,val){
+    this.pc[eid]=this.pc[eid]||{};this.pc[eid][item]=val;this.renderPrecheck();
+  },
+  renderPrecheck(){
+    const role=this.role();
+    document.getElementById("precheckRows").innerHTML=this.escs.map(e=>{
+      const pre=e.active_lockdown?null:this.detail[e.id]?.precheck_today;
+      const pc=this.pc[e.id]||(pre?{steps:pre.steps_result,comb:pre.comb_result,
+        handrail:pre.handrail_result,lighting:pre.lighting_result,estop:pre.estop_result}:{});
+      const cell=(item)=>{
+        const cur=pc[item];
+        return `<div class="pc-items">${["pass","fail","na"].map(v=>
+          `<label class="${cur===v?"sel-"+v:""}"><input type="radio" name="${eid}-${item}"
+            ${cur===v?"checked":""} ${role!=="inspector"?"disabled":""}
+            onchange="App.setPc('${eid}','${item}','${v}')">${ {pass:"通过",fail:"失败",na:"不适用"}[v]}</label>`).join("")}</div>`;
+      };
+      const estopCell=()=>{const cur=pc.estop;
+        return `<div class="pc-items">${["pass","fail"].map(v=>
+          `<label class="${cur===v?"sel-"+v:""}"><input type="radio" name="${eid}-estop"
+            ${cur===v?"checked":""} ${role!=="inspector"?"disabled":""}
+            onchange="App.setPc('${eid}','estop','${v}')">${v==="pass"?"通过":"失败"}</label>`).join("")}</div>`;};
+      let concl;
+      if(e.status==="locked")concl=`<span class="badge locked">封控中</span>`;
+      else if(pre?.completed_at)concl=`<span class="badge pass">✓ 全部合格 ${pre.completed_at.slice(11,16)}</span>`;
+      else if(pre)concl=`<span class="badge fail">检查未完成/有不合格项</span>`;
+      else concl=`<span class="badge na">今日未检查</span>`;
+      const canInspect=role==="inspector";
+      const canStart=role==="duty"&&e.status!=="running";
+      const startBtn=e.status==="running"
+        ?`<button class="act" disabled>运行中</button>`
+        :`<button class="act primary" ${canStart?"":"disabled"}
+            title="按当前方向版本提交"
+            onclick="App.start('${e.id}')">▶ 启动 v${e.direction_version}</button>`;
+      return `<tr>
+        <td><b>${e.id}</b><div class="muted">${e.floor_from}F→${e.floor_to}F ${e.name}</div></td>
+        <td>${e.direction==="up"?'<span class="esc-arrow up">▲</span> 上行':'<span class="esc-arrow down">▼</span> 下行'}
+            <div class="muted">v${e.direction_version} · ${e.on_time}-${e.off_time}</div></td>
+        <td><div style="display:flex;flex-direction:column;gap:4px">
+              ${ITEMS.map(([k,label])=>`<div style="display:flex;align-items:center;gap:6px">
+                <span class="muted" style="width:52px">${label}</span>${cell(k)}</div>`).join("")}
+            </div></td>
+        <td><div style="display:flex;align-items:center;gap:6px">
+          <span class="muted" style="width:52px">急停</span>${estopCell()}</div></td>
+        <td style="min-width:150px">${concl}
+          <div style="margin-top:6px"><button class="act" ${canInspect?"":"disabled"}
+            onclick="App.submitPc('${e.id}')">提交检查</button></div></td>
+        <td style="min-width:120px">${startBtn}
+          <div class="muted" id="sv-${e.id}"></div></td>
+      </tr>`;
+    }).join("");
+  },
+  async submitPc(eid){
+    const items=this.pc[eid];
+    if(!items||ITEMS.some(([k])=>!items[k])||!items.estop){
+      this.toast("五项检查必须逐项选择（含急停装置），存在漏项",false,"inspection_incomplete");return;}
+    try{
+      await this.api(`/api/escalators/${eid}/precheck`,{method:"POST",
+        body:JSON.stringify({staff_id:this.staffId,items})});
+      this.toast(`${eid} 班前检查全部合格，允许启动`);
+    }catch(e){this.toast(e.message,false,e.code);}
+    await this.refresh();
+  },
+  async start(eid){
+    const e=this.escs.find(x=>x.id===eid);
+    let info;
+    try{
+      info=await this.api(`/api/escalators/${eid}/start/prepare`,{method:"POST",
+        body:JSON.stringify({staff_id:this.staffId})});
+    }catch(err){this.toast(err.message,false,err.code);return;}
+    const ok=confirm(`开梯确认 — ${eid}\n计划方向：${info.direction==="up"?"上行 ▲":"下行 ▼"}\n命令版本：v${info.version}\n\n确认按当前版本提交启动？（若另一名值班员正占用，本提示之后将被拒绝）`);
+    if(!ok){try{await this.api(`/api/escalators/${eid}/start/cancel`,{method:"POST",
+      body:JSON.stringify({staff_id:this.staffId})});}catch(_){}return;}
+    try{
+      await this.api(`/api/escalators/${eid}/start`,{method:"POST",
+        body:JSON.stringify({staff_id:this.staffId,direction:info.direction,
+          version:info.version})});
+      this.toast(`${eid} 已启动（${info.direction==="up"?"上行":"下行"} v${info.version}）`);
+    }catch(err){this.toast(err.message,false,err.code);}
+    await this.refresh();
+  },
+  async stop(eid,reason){
+    try{await this.api(`/api/escalators/${eid}/stop`,{method:"POST",
+      body:JSON.stringify({staff_id:this.staffId,reason:reason||"manual"})});
+      this.toast(`${eid} 已停梯`);
+    }catch(e){this.toast(e.message,false,e.code);}
+    await this.refresh();
+  },
+
+  /* ---------------- 运行状态 ---------------- */
+  renderStatus(){
+    document.getElementById("statusCards").innerHTML="<h2>运行状态与读数</h2>"+
+      this.escs.map(e=>{
+        const c=e.cabinet,w=e.crowd;
+        return `<div class="card" style="margin-bottom:10px">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <b style="font-size:15px">${e.id}</b><span class="muted">${e.name} ${e.floor_from}F→${e.floor_to}F</span>
+            <span class="badge ${e.status}">${{running:"运行中",stopped:"已停梯",locked:"封控中"}[e.status]}</span>
+            <span style="margin-left:auto"></span>
+            <button class="act danger" ${this.role()==="duty"&&e.status==="running"?"":"disabled"}
+              onclick="App.stop('${e.id}')">■ 停梯</button>
+            <button class="act amber" ${this.role()==="duty"&&e.status==="running"?"":"disabled"}
+              onclick="App.trip('${e.id}')" title="模拟控制柜急停跳闸">⚡ 跳闸</button>
+            <button class="act" ${this.role()==="duty"&&e.status!=="locked"?"":"disabled"}
+              onclick="App.directionDialog('${e.id}')">⇅ 改方向</button>
+          </div>
+          <div class="readings" style="margin-top:8px;display:flex;gap:26px;flex-wrap:wrap">
+            <span>控制柜：<b>${c.running?"合闸运行":"停机"}</b> · 电流 <b>${c.current_a.toFixed(1)}A</b>
+              · 带速 <b>${c.speed_mps.toFixed(2)}m/s</b>${c.fault_code?` · <span style="color:var(--red)">故障码 ${c.fault_code}</span>`:""}</span>
+            <span>客流：<b>${w.people_per_min}</b> 人/分 · 密度 <b>${w.density}</b></span>
+            ${e.active_lockdown?`<span class="timer">封控 ${fmtDur(e.active_lockdown.elapsed_sec)}</span>`:""}
+          </div>
+        </div>`;
+      }).join("");
+    document.getElementById("injectPanel").innerHTML=this.escs.slice(0,3).map(e=>
+      `<div style="margin:6px 0"><b>${e.id}</b>
+        <button class="act" onclick="App.inject('${e.id}','crowd','critical')">注入大客流</button>
+        <button class="act" onclick="App.inject('${e.id}','trip')">注入跳闸</button>
+        <button class="act" onclick="App.inject('${e.id}','fault')">注入故障码</button>
+      </div>`).join('')+`<p class="muted">对运行中设备注入大客流将自动触发客流封控；跳闸每 24 小时满 3 次判为反复跳停并自动报修。</p>`;
+  },
+  async trip(eid){
+    try{await this.api(`/api/escalators/${eid}/trip`,{method:"POST",
+      body:JSON.stringify({staff_id:this.staffId,code:"E07_EMERGENCY_STOP"})});
+      this.toast(`${eid} 控制柜跳闸，设备已停机`);}
+    catch(e){this.toast(e.message,false,e.code);}
+    await this.refresh();
+  },
+  directionDialog(eid){
+    const e=this.escs.find(x=>x.id===eid);
+    const nd=e.direction==="up"?"down":"up";
+    if(confirm(`将 ${eid} 计划方向由 ${e.direction==="up"?"上行▲":"下行▼"} 改为 ${nd==="up"?"上行▲":"下行▼"}？\n（运行中/封控中不可调整，版本号将递增）`))
+      this.setDirection(eid,nd);
+  },
+  async setDirection(eid,direction){
+    try{const r=await this.api(`/api/escalators/${eid}/direction`,{method:"POST",
+      body:JSON.stringify({staff_id:this.staffId,direction})});
+      this.toast(`${eid} 方向已更新，当前版本 v${r.version}，启动须按新版本提交`);
+    }catch(e){this.toast(e.message,false,e.code);}
+    await this.refresh();
+  },
+  async inject(eid,kind,level){
+    try{await this.api(`/api/escalators/${eid}/inject`,{method:"POST",
+      body:JSON.stringify({staff_id:this.staffId,kind,level})});
+      this.toast(`已向 ${eid} 注入演示信号：${kind}`);}
+    catch(e){this.toast(e.message,false,e.code);}
+    await this.refresh();
+  },
+
+  /* ---------------- 封控/报修/复开 ---------------- */
+  renderLockdown(){
+    const locked=this.escs.filter(e=>e.active_lockdown);
+    const role=this.role();
+    const box=document.getElementById("tab-lockdown");
+    if(!locked.length){
+      box.innerHTML=`<div class="card"><h2>封控计时 / 报修 / 复开</h2>
+        <p class="muted">当前无封控设备。可在「运行状态」对运行中扶梯注入大客流或连续跳闸触发现场事件。</p></div>`;
+      return;}
+    box.innerHTML=locked.map(e=>{
+      const ld=e.active_lockdown,o=e.active_order,rc=e.active_recheck;
+      const steps=[];
+      steps.push(["封控",1]);
+      steps.push(["设围挡",!!ld.barrier_set_at]);
+      if(ld.reason==="fault"){
+        steps.push(["报修",!!o]);steps.push(["到场",!!o?.arrived_at]);
+        steps.push(["修复",!!o?.fixed_at]);
+        steps.push([rc?.result==="approved"?"复检批准":"复检",
+          rc?.result==="approved"?1:(rc?.result==="rejected"?"bad":0)]);
+      }else{steps.push(["客流回落",e.crowd.density!=="critical"]);}
+      steps.push(["撤围挡",!e.barrier]);
+      steps.push(["复开",0]);
+      const flow=`<div class="flow-steps">`+steps.map((s,i)=>
+        `<span class="step ${s[1]===1?"done":s[1]==="bad"?"bad":""}">${i+1}. ${s[0]}</span>${
+          i<steps.length-1?'<span class="arr">→</span>':""}`).join("")+`</div>`;
+      let body="";
+      if(ld.reason==="fault") body=`
+        <div style="margin:10px 0">
+          ${o?`
+            <table><tr><th>工单</th><th>报修描述</th><th>到场</th><th>修复</th><th>SLA</th></tr>
+            <tr><td>#${o.id}</td><td>${o.description}
+              ${o.photo_path?`<br><img class="photo-thumb" src="/uploads/${o.photo_path}">`:""}</td>
+              <td>${o.arrived_at?o.arrived_at.slice(5,16).replace("T"," "):"—"}</td>
+              <td>${o.fixed_at?o.fixed_at.slice(5,16).replace("T"," "):
+                (o.overdue_sec>0?`<span class="badge fail">维修延期 ${Math.round(o.overdue_sec/60)} 分钟</span>`:"未修复")}</td>
+              <td><span class="muted">截止 ${o.due_at.slice(11,16)}</span></td></tr></table>`
+            :`<p class="muted">封控已建立，等待现场报修（故障照片可选）。</p>`}
+        </div>
+        <div>
+          ${!o?`<label class="act" style="display:inline-block">选择故障照片
+              <input type="file" accept="image/*" id="ph-${e.id}" style="display:none"
+                onchange="App.previewPhoto('${e.id}')"></label>
+             <img id="phv-${e.id}" class="photo-thumb" style="display:none">
+             <button class="act danger" ${role==="duty"||role==="inspector"?"":"disabled"}
+               onclick="App.report('${e.id}')">📋 提交故障报修</button>`:""}
+          ${o&&!o.arrived_at?`<button class="act" ${role==="service"?"":"disabled"}
+             onclick="App.arrive('${e.id}')">🔧 维修到场（须先设围挡）</button>`:""}
+          ${o&&o.arrived_at&&!o.fixed_at?`<button class="act primary" ${role==="service"?"":"disabled"}
+             onclick="App.fixed('${e.id}')">✔ 登记修复完成</button>`:""}
+          ${o&&o.fixed_at&&!(rc&&rc.result==="approved")?`
+             <button class="act" ${role==="inspector"?"":"disabled"}
+               onclick="App.submitRc('${e.id}')">🔍 提交复检</button>
+             ${rc?`<span class="badge ${rc.result==="rejected"?"fail":"pending"}">
+               ${rc.result==="rejected"?"复检退回，需返工":"待他人批准"}（提交人 ${this.escName[rc.inspector_id]||rc.inspector_id}）</span>
+               ${rc.result==="rejected"?`<button class="act amber" ${role==="service"?"":"disabled"}
+                 onclick="App.rework('${e.id}')">返工处理</button>`:""}`:""}`:""}
+          ${o&&o.fixed_at&&rc?.result==="approved"?
+             `<span class="badge pass">复检已批准（${this.escName[rc.decider_id]||rc.decider_id}），可撤除围挡并复开</span>`:""}
+        </div>`;
+      else body=`<p class="muted" style="margin:8px 0">客流事件封控：当前密度
+          <b>${e.crowd.density}</b>（回落至 normal/low 后方可撤围挡复开）。
+          客服应同步发布绕行提示。</p>
+        <button class="act" ${role==="cs"?"":"disabled"}
+          onclick="App.publishDetour('${e.id}')">📢 发布绕行提示</button>`;
+
+      const canRemove=role==="duty"||role==="inspector";
+      const reopenReady=!e.barrier&&ld.barrier_set_at&&(
+        ld.reason==="crowd"?!["critical","high"].includes(e.crowd.density)
+        :(o?.fixed_at&&rc?.result==="approved"));
+      return `<div class="card" id="ld-${e.id}">
+        <h2>${e.id} ${e.name}
+          <span class="badge locked">${ld.reason==="fault"?"故障封控":"客流封控"}</span>
+          <span class="timer" style="margin-left:auto">⏱ ${fmtDur(ld.elapsed_sec)}</span></h2>
+        <div class="muted">封控原因：${ld.detail||"—"} · 开始 ${ld.started_at.slice(5,19).replace("T"," ")}</div>
+        ${flow}
+        <div style="margin-top:10px">
+          <button class="act ${e.barrier?"":"danger"}" ${canRemove?"":"disabled"}
+            onclick="App.barrier('${e.id}',${!e.barrier})">
+            ${e.barrier?"🚧 撤除围挡":"🚧 设置围挡（斜纹围栏）"}</button>
+          <span class="${e.barrier?"badge pass":"badge na"}">${e.barrier?"围挡已设置":"围挡缺失"}</span>
+        </div>
+        ${body}
+        <div class="reopen-zone">
+          <h3>复开确认区（与日常操作隔离）</h3>
+          <div class="hint">复开前系统将逐项核验：维修完成 → 复检经<b>他人</b>批准 → 围挡已撤除；
+            任何一项未满足都会按「提前复开」拒绝。</div>
+          <button class="reopen" ${role==="duty"&&reopenReady?"":"disabled"}
+            onclick="App.reopen('${e.id}')">复 开 确 认</button>
+          ${!reopenReady?`<span class="muted" style="margin-left:14px">
+            ${e.barrier?"围挡尚未撤除":(!o&&ld.reason==="fault"?"维修流程未完成":"条件未全部满足")}</span>`:""}
+        </div>
+      </div>`;
+    }).join("");
+  },
+  _photoHex(eid){return new Promise(res=>{
+    const f=document.getElementById("ph-"+eid)?.files?.[0];
+    if(!f)return res(null);
+    const r=new FileReader();r.onload=()=>{
+      const u8=new Uint8Array(r.result);let h="";
+      for(const b of u8)h+=b.toString(16).padStart(2,"0");
+      res({hex:h,name:f.name});};r.readAsArrayBuffer(f);
+  });},
+  previewPhoto(eid){const f=document.getElementById("ph-"+eid).files[0];
+    const v=document.getElementById("phv-"+eid);
+    if(f){v.src=URL.createObjectURL(f);v.style.display="inline";}},
+  async report(eid){
+    const p=await this._photoHex(eid);
+    try{await this.api(`/api/escalators/${eid}/repair`,{method:"POST",body:JSON.stringify({
+      staff_id:this.staffId,description:"现场故障报修：梯级异响，急停后无法复位",
+      photo_data:p?.hex,filename:p?.name})});
+      this.toast(`${eid} 报修已提交，SLA 60 分钟`);}
+    catch(e){this.toast(e.message,false,e.code);}
+    await this.refresh();
+  },
+  async arrive(eid){try{await this.api(`/api/escalators/${eid}/arrive`,{method:"POST",
+      body:JSON.stringify({staff_id:this.staffId})});this.toast(`${eid} 维修已到场`);}
+    catch(e){this.toast(e.message,false,e.code);}await this.refresh();},
+  async fixed(eid){try{await this.api(`/api/escalators/${eid}/fixed`,{method:"POST",
+      body:JSON.stringify({staff_id:this.staffId,note:"更换驱动链张紧装置"})});
+      this.toast(`${eid} 已登记修复，等待复检`);}
+    catch(e){this.toast(e.message,false,e.code);}await this.refresh();},
+  async rework(eid){try{await this.api(`/api/escalators/${eid}/rework`,{method:"POST",
+      body:JSON.stringify({staff_id:this.staffId,note:"复检发现异响仍存在"})});
+      this.toast(`${eid} 已退回返工`);}catch(e){this.toast(e.message,false,e.code);}
+    await this.refresh();},
+  async submitRc(eid){try{const r=await this.api(`/api/escalators/${eid}/recheck`,{method:"POST",
+      body:JSON.stringify({staff_id:this.staffId,note:"复检梯级/梳齿/扶手/急停"})});
+      this.toast(`复检 #${r.recheck_id} 已提交，等待另一名巡检员批准`);}
+    catch(e){this.toast(e.message,false,e.code);}
+    await this.refresh();},
+  async barrier(eid,inPlace){
+    try{await this.api(`/api/escalators/${eid}/barrier`,{method:"POST",
+      body:JSON.stringify({staff_id:this.staffId,in_place})});
+      this.toast(`${eid} 围挡${inPlace?"已设置":"已撤除"}`);}
+    catch(e){this.toast(e.message,false,e.code);}
+    await this.refresh();
+  },
+  async reopen(eid){
+    if(!confirm("复开确认：请确认维修、复检、围挡三项均已完成。确认复开？"))return;
+    try{await this.api(`/api/escalators/${eid}/reopen`,{method:"POST",
+      body:JSON.stringify({staff_id:this.staffId})});
+      this.toast(`${eid} 复开完成，设备回到停梯待启动状态`);
+      this.tab("map");}
+    catch(e){this.toast(e.message,false,e.code);}
+    await this.refresh();
+  },
+
+  /* ---------------- 复检审批 ---------------- */
+  async renderRechecks(){
+    const pend=await this.api("/api/rechecks/pending");
+    const role=this.role();
+    document.getElementById("recheckList").innerHTML=pend.length?`<table>
+      <thead><tr><th>复检#</th><th>扶梯</th><th>提交人</th><th>提交时间</th><th>备注</th><th>审批</th></tr></thead>
+      <tbody>${pend.map(r=>`<tr>
+        <td>#${r.id}</td><td>${r.esc_id} ${r.esc_name}</td>
+        <td>${r.inspector_name}</td><td>${r.submitted_at.slice(5,16).replace("T"," ")}</td>
+        <td>${r.note||""}</td>
+        <td>${r.inspector_id===this.staffId
+          ?`<span class="badge fail">不能批准本人提交的复检</span>`
+          :`<button class="act primary" ${role==="inspector"?"":"disabled"}
+             onclick="App.decide(${r.id},true)">批准</button>
+            <button class="act danger" ${role==="inspector"?"":"disabled"}
+             onclick="App.decide(${r.id},false)">退回</button>`}</td>
+      </tr>`).join("")}</tbody></table>`
+      :`<p class="muted">暂无待审批复检。</p>`;
+    const all=this.escs.flatMap(e=>(this.detail[e.id]?.rechecks||[]).map(r=>({...r,eid:e.id})));
+    document.getElementById("recheckHistory").innerHTML=`<table>
+      <thead><tr><th>#</th><th>扶梯</th><th>结果</th><th>提交人</th><th>批准人</th><th>时间</th></tr></thead>
+      <tbody>${all.slice(0,15).map(r=>`<tr><td>${r.id}</td><td>${r.eid}</td>
+        <td><span class="badge ${r.result==="approved"?"pass":r.result==="rejected"?"fail":"pending"}">
+          ${ {approved:"已批准",rejected:"已退回",pending:"待审批"}[r.result]}</span></td>
+        <td>${this.escName[r.inspector_id]||r.inspector_id}</td>
+        <td>${r.decider_id?(this.escName[r.decider_id]||r.decider_id):"—"}</td>
+        <td>${(r.decided_at||r.submitted_at).slice(5,16).replace("T"," ")}</td></tr>`).join("")}
+      </tbody></table>`;
+  },
+  async decide(id,ok){
+    try{await this.api(`/api/rechecks/${id}/decide`,{method:"POST",
+      body:JSON.stringify({staff_id:this.staffId,approve:ok,
+        note:ok?"复检合格":"复检不合格，退回返工"})});
+      this.toast(ok?`复检 #${id} 已批准`:`复检 #${id} 已退回，维修须返工`);}
+    catch(e){this.toast(e.message,false,e.code);}
+    await this.refresh();
+  },
+
+  /* ---------------- 绕行 ---------------- */
+  renderDetours(){
+    const actives=this.escs.filter(e=>e.detour);
+    document.getElementById("detourBanners").innerHTML=actives.map(e=>
+      `<div class="detour-banner">📢 绕行提示（${e.id} ${e.name}）：${e.detour.message}
+       <span class="muted">— ${this.escName[e.detour.published_by]||e.detour.published_by}
+       ${e.detour.published_at.slice(5,16).replace("T"," ")}</span></div>`).join("");
+    const role=this.role();
+    document.getElementById("detourAdmin").innerHTML=
+      actives.map(e=>`<div style="border-bottom:1px solid var(--silver-line);padding:8px 0">
+        <b>${e.id}</b>：${e.detour.message}
+        <button class="act" style="float:right" ${role==="cs"?"":"disabled"}
+          onclick="App.cancelDetour(${e.detour.id})">撤销</button></div>`).join("")
+      ||`<p class="muted">当前无绕行提示。封控客流事件时由客服发布。</p>
+        <div style="margin-top:8px">${this.escs.slice(0,4).map(e=>
+          `<button class="act" ${role==="cs"?"":"disabled"} style="margin:3px"
+            onclick="App.publishDetour('${e.id}')">📢 ${e.id} 发绕行</button>`).join("")}</div>`;
+  },
+  async publishDetour(eid){
+    const msg=prompt("输入绕行提示内容：",
+      eid+" 暂停使用，请绕行相邻扶梯或直梯，注意脚下安全。");
+    if(!msg)return;
+    try{await this.api(`/api/escalators/${eid}/detour`,{method:"POST",
+      body:JSON.stringify({staff_id:this.staffId,message:msg})});
+      this.toast("绕行提示已发布至楼层屏");}
+    catch(e){this.toast(e.message,false,e.code);}
+    await this.refresh();
+  },
+  async cancelDetour(id){try{await this.api(`/api/detours/${id}/cancel`,{method:"POST",
+      body:JSON.stringify({staff_id:this.staffId})});this.toast("绕行提示已撤销");}
+    catch(e){this.toast(e.message,false,e.code);}await this.refresh();},
+
+  /* ---------------- 事件 ---------------- */
+  async loadEvents(){
+    const eid=document.getElementById("fEsc").value;
+    const ty=document.getElementById("fType").value;
+    const q=new URLSearchParams();if(eid)q.set("esc_id",eid);if(ty)q.set("type",ty);q.set("limit","300");
+    const list=await this.api("/api/events?"+q.toString());
+    document.getElementById("eventList").innerHTML=list.map(e=>{
+      const cls=BAD_EVENTS.has(e.type)?"bad":WARN_EVENTS.has(e.type)?"warn":"";
+      const p=e.payload&&Object.keys(e.payload).length?JSON.stringify(e.payload):"";
+      return `<div class="ev ${cls}"><span class="t">${e.at.slice(5,19).replace("T"," ")}</span>
+        <span class="ty">${e.type}</span><span class="muted">${e.esc_id}</span>
+        ${e.actor_name?` <span class="muted">· ${e.actor_name}</span>`:""}
+        ${p?`<div class="pl">${p}</div>`:""}</div>`;
+    }).join("")||`<p class="muted">无事件</p>`;
+  }
+};
+function fmtDur(sec){
+  if(sec<0)sec=0;const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;
+  return (h?String(h).padStart(2,"0")+":":"")+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0");
+}
+App.init();
+// 定时器让封控秒数即时跳动
+setInterval(()=>{if(document.getElementById("tab-lockdown").classList.contains("active")){
+  App.escs.forEach(e=>{if(!e.active_lockdown)return;
+    e.active_lockdown.elapsed_sec+=1;});App.renderLockdown();}},1000);
+</script>
+</body>
+</html>
